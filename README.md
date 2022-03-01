@@ -40,4 +40,12 @@ jobs:
 
 `push`: Boolean to determine if the image should be pushed to the remote repoistory. Defaults to `true`.
 
+`acr-username`: The username to use to login to acr. Fetch this value from a github secret.
+
+`acr-password`: The password to use to login to acr. Fetch this value from a github secret.
+
+`acr-registry-url`: The url of which repository to use in ACR. Default to `tignis.azurecr.io`.
+
+`pip-extra-index-url`: The extra index url for pip to fetch packages from our jfrog repository. Fetch this value from a secret.
+
 `docker-build-context`: What directory to use as the build context for docker. Defaults to the current directory.
