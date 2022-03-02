@@ -24,7 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Build and Push docker image
-        uses: tignis/docker-github-action@v1.0.0
+        uses: tignis/docker-github-action@v1.1.0
         with:
           images: |
             tignis.azurecr.io/tignis/docker_github_action
