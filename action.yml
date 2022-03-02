@@ -25,6 +25,10 @@ inputs:
     description: 'Build context for docker if not the current directory'
     required: false
     default: '.'
+  dockerfile:
+    description: 'Name of the docker file to use'
+    required: false
+    default: 'Dockerfile'
 runs:
   using: "composite"
   steps:
@@ -67,6 +71,7 @@ runs:
         secrets: |
           "pipconf=[global]
           extra-index-url = ${{ inputs.pip-extra-index-url }}
+        file: ${{ inputs.dockerfile }}
     - name: Image digest
       run: echo ${{ steps.docker_build.outputs.digest }}
       shell: bash

@@ -49,3 +49,5 @@ jobs:
 `pip-extra-index-url`: The extra index url for pip to fetch packages from our jfrog repository. Fetch this value from a secret.
 
 `docker-build-context`: What directory to use as the build context for docker. Defaults to the current directory.
+
+`dockerfile`: The name of the Dockerfile to use. Default to `Dockerfile`.
