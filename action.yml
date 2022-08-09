@@ -76,7 +76,7 @@ runs:
         labels: ${{ steps.meta.outputs.labels }}
         secrets: |
           "pipconf=[global]
-          extra-index-url = ${{ inputs.pip-extra-index-url }}
+          extra-index-url = ${{ inputs.pip-extra-index-url }}"
         file: ${{ inputs.dockerfile }}
     - name: Image digest
       run: echo ${{ steps.docker_build.outputs.digest }}
