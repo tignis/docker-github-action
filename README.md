@@ -49,5 +49,9 @@ jobs:
 `pip-extra-index-url`: The extra index url for pip to fetch packages from our jfrog repository. Fetch this value from a secret.
 
 `docker-build-context`: What directory to use as the build context for docker. Defaults to the current directory.
+**Note:** If changinge the build context, ensure that the `dockerfile` parameter described below is also adjusted to be prefixed
+with the build context. For example if you have `docker-build-context: ./tignis/app`,then you'll also likely set 
+`dockerfile: ./tignis/app/dockerfile` too.
 
 `dockerfile`: The name of the Dockerfile to use. Default to `Dockerfile`.
+**Note:**: This path is always from the root of the repository, not from the root of the build-context.
