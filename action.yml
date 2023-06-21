@@ -29,6 +29,10 @@ inputs:
     description: 'Name of the docker file to use'
     required: false
     default: 'Dockerfile'
+  platforms:
+    description: 'Comma separated list of platforms to use for docker build'
+    required: false
+    default: 'linux/amd64,linux/arm64'
 runs:
   using: "composite"
   steps:
@@ -74,6 +78,7 @@ runs:
         push: ${{ inputs.push }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
+        platforms: ${{inputs.platforms}}
         secrets: |
           "pipconf=[global]
           extra-index-url = ${{ inputs.pip-extra-index-url }}"

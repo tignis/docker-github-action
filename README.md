@@ -55,3 +55,5 @@ with the build context. For example if you have `docker-build-context: ./tignis/
 
 `dockerfile`: The name of the Dockerfile to use. Default to `Dockerfile`.
 **Note:**: This path is always from the root of the repository, not from the root of the build-context.
+
+`platforms`: A comma separated list of platforms to build images for. Defaults to `linux/amd64,linux/arm64`.
