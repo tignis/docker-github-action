@@ -33,6 +33,14 @@ inputs:
     description: 'Comma separated list of platforms to use for docker build'
     required: false
     default: 'linux/amd64,linux/arm64'
+  tag-prefix:
+    description: 'Prefix to add to generated docker tag'
+    required: false
+    default: ''
+outputs:
+  tag: # id of output
+    description: 'Tag used for the docker image'
+    value: ${{ steps.meta.outputs.tags }}
 runs:
   using: "composite"
   steps:
@@ -54,8 +62,8 @@ runs:
         images: ${{ inputs.images }}
         # generate Docker tags based on the following events/attributes
         tags: |
-          type=sha,prefix=${{env.BRANCH_NAME}}-${{env.DATE}}-${{github.run_number}}-,enable=${{ !startsWith(github.event_name, 'release') }}
-          type=semver,pattern={{version}},enable=${{ startsWith(github.event_name, 'release') }}
+          type=sha,prefix=${{inputs.tag-prefix}}${{env.BRANCH_NAME}}-${{env.DATE}}-${{github.run_number}}-,enable=${{ !startsWith(github.event_name, 'release') }}
+          type=semver,pattern=${{inputs.tag-prefix}}{{version}},enable=${{ startsWith(github.event_name, 'release') }}
     - name: Set up Docker Context for Buildx
       id: buildx-context
       run: |
