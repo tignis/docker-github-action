@@ -57,3 +57,9 @@ with the build context. For example if you have `docker-build-context: ./tignis/
 **Note:**: This path is always from the root of the repository, not from the root of the build-context.
 
 `platforms`: A comma separated list of platforms to build images for. Defaults to `linux/amd64,linux/arm64`.
+
+`tag-prefix`: A prefix to add to the generated image tag. Defaults to an empty string.
+
+## Outputs
+
+`tag`: The image tag that was generated.
