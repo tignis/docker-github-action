@@ -37,6 +37,10 @@ inputs:
     description: 'Prefix to add to generated docker tag'
     required: false
     default: ''
+  GITHUB_TOKEN:
+    description: 'Github token of the repository (automatically created by Github)'
+    default: ${{ github.token }}
+    required: false
 outputs:
   tag: # id of output
     description: 'Tag used for the docker image'
@@ -103,3 +107,14 @@ runs:
     - name: Image digest
       run: echo ${{ steps.docker_build.outputs.digest }}
       shell: bash
+    - name: Comment latest docker image
+      if: github.event_name == 'pull_request'
+      shell: bash
+      run: |
+        # Use GitHub API to create a comment on the PR
+        PR_NUMBER=${{ github.event.pull_request.number }}
+        COMMENT='Docker image built: `${{ steps.meta.outputs.tags }}`'
+        GITHUB_TOKEN=${{ inputs.GITHUB_TOKEN }}
+        COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
+
+        curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"${COMMENT}\"}"
