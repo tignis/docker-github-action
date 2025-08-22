@@ -1,5 +1,5 @@
 name: 'Docker Build and Push'
-description: 'Build and optionally push a docker image to ACR'
+description: 'Build and optionally push a docker image to ACR with multi-architecture support'
 inputs:
   images:
     description: 'Name of images to build'
@@ -11,11 +11,11 @@ inputs:
     description: 'Password to use when logging into ACR'
     required: true
   acr-registry-url:
-    description: 'The url of the ACR registry to fetch credentials from. This should matchup with the image names.'
+    description: 'The url of the ACR registry to fetch credentials from'
     required: false
     default: 'tignis.azurecr.io'
   pip-extra-index-url:
-    description: 'The PIP_EXTRA_INDEX_URL to include as a secret in the docker build. Required to pull private pip packages.'
+    description: 'The PIP_EXTRA_INDEX_URL to include as a secret'
     required: true
   push:
     description: 'Also push the image to the remote repository'
@@ -32,19 +32,37 @@ inputs:
   platforms:
     description: 'Comma separated list of platforms to use for docker build'
     required: false
-    default: 'linux/amd64,linux/arm64'
-  tag-prefix:
-    description: 'Prefix to add to generated docker tag'
+    default: 'linux/amd64'
+  multi-arch:
+    description: 'Enable multi-architecture support with manifest creation'
     required: false
-    default: ''
+    default: 'false'
+  runner-architecture:
+    description: 'Architecture of the current runner (for multi-arch builds)'
+    required: false
+    default: 'amd64'
+  create-manifest:
+    description: 'Create and push a multi-arch manifest (only for multi-arch coordinator)'
+    required: false
+    default: 'false'
+  architecture-tags:
+    description: 'JSON string with architecture-specific image tags (for manifest creation)'
+    required: false
+    default: '{}'
   GITHUB_TOKEN:
-    description: 'Github token of the repository (automatically created by Github)'
+    description: 'Github token of the repository'
     default: ${{ github.token }}
     required: false
 outputs:
-  tag: # id of output
-    description: 'Tag used for the docker image'
+  tag:
+    description: 'Full tag used for the docker image'
     value: ${{ steps.meta.outputs.tags }}
+  arch-tag:
+    description: 'Architecture-specific tag for multi-arch builds'
+    value: ${{ steps.arch-tag.outputs.tag }}
+  digests:
+    description: 'Image digests for manifest creation'
+    value: ${{ steps.docker_build.outputs.digest }}
 runs:
   using: "composite"
   steps:
@@ -118,3 +136,32 @@ runs:
         COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
 
         curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"${COMMENT}\"}"
+    - name: Set architecture tag
+      id: arch-tag
+      if: ${{ inputs.multi-arch == 'true' }}
+      shell: bash
+      run: |
+        FULL_TAG="${{ steps.meta.outputs.tags }}"
+        ARCH="${{ inputs.runner-architecture }}"
+        echo "tag=${FULL_TAG}-${ARCH}" >> $GITHUB_OUTPUT
+    - name: Create multi-architecture manifest
+      if: ${{ inputs.create-manifest == 'true' }}
+      shell: bash
+      run: |
+        # Parse the architecture tags JSON
+        ARCH_TAGS='${{ inputs.architecture-tags }}'
+        BASE_IMAGE=$(echo "${{ steps.meta.outputs.tags }}" | cut -d ':' -f 1)
+        BASE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d ':' -f 2)
+        
+        # Create manifest command with all architectures
+        MANIFEST_CMD="docker manifest create ${BASE_IMAGE}:${BASE_TAG}"
+        
+        # Add each architecture-specific image to the manifest
+        for ARCH_TAG in $(echo $ARCH_TAGS | jq -r 'keys[]'); do
+          DIGEST=$(echo $ARCH_TAGS | jq -r ".[\"$ARCH_TAG\"]")
+          MANIFEST_CMD="$MANIFEST_CMD ${BASE_IMAGE}@${DIGEST}"
+        done
+        
+        # Execute the manifest commands
+        eval $MANIFEST_CMD
+        docker manifest push ${BASE_IMAGE}:${BASE_TAG}
