@@ -130,32 +130,12 @@ jobs:
           username: ${{ secrets.acr-username }}
           password: ${{ secrets.acr-password }}
       
-      - name: Create and push manifest
-        id: manifest
-        run: |
-          IMAGE=${{ needs.docker-amd64.outputs.image }}
-          CLEAN_TAG=${{ needs.docker-amd64.outputs.clean-tag }}
-          FINAL_TAG="${IMAGE}:${CLEAN_TAG}"
-          
-          # Enable experimental features for manifest command
-          export DOCKER_CLI_EXPERIMENTAL=enabled
-          
-          echo "Creating manifest for ${FINAL_TAG}"
-          
-          # Create the manifest
-          docker manifest create ${FINAL_TAG} \
-            ${IMAGE}@${{ needs.docker-amd64.outputs.digest }} \
-            ${IMAGE}@${{ needs.docker-arm64.outputs.digest }}
-          
-          # Add architecture annotations
-          docker manifest annotate ${FINAL_TAG} \
-            ${IMAGE}@${{ needs.docker-amd64.outputs.digest }} --arch amd64
-          docker manifest annotate ${FINAL_TAG} \
-            ${IMAGE}@${{ needs.docker-arm64.outputs.digest }} --arch arm64
-
-          # Push the manifest
-          docker manifest push ${FINAL_TAG}
-          
-          echo "tag=${FINAL_TAG}" >> $GITHUB_OUTPUT
-          echo "Multi-arch manifest created and pushed: ${FINAL_TAG}"
+      - name: Build manifest
         shell: bash
+        run: |
+          TAG=${{ needs.docker-amd64.outputs.tag }}
+          TAG=${TAG#${{ needs.docker-amd64.outputs.image }}:${{ needs.docker-amd64.outputs.tag-prefix }}}
+          DIGEST_ARM64=$(docker manifest inspect ${{ needs.docker-arm64.outputs.tag }} | jq -r '.manifests[] | select(.platform.architecture=="arm64") | .digest')
+          DIGEST_AMD64=$(docker manifest inspect ${{ needs.docker-amd64.outputs.tag }} | jq -r '.manifests[] | select(.platform.architecture=="amd64") | .digest')
+          docker manifest create ${{ needs.docker-amd64.outputs.image }}:${TAG} ${{ needs.docker-arm64.outputs.image }}@${DIGEST_ARM64} ${{ needs.docker-amd64.outputs.image }}@${DIGEST_AMD64}
+          docker manifest push ${{ needs.docker-amd64.outputs.image }}:${TAG}
