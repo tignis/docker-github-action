@@ -1,0 +1,166 @@
+name: 'Multi-Architecture Docker Build'
+on:
+  workflow_call:
+    inputs:
+      images:
+        description: 'Name of images to build'
+        required: true
+        type: string
+      acr-username:
+        description: 'Username to use when logging into ACR'
+        required: true
+        type: string
+      acr-password:
+        description: 'Password to use when logging into ACR'
+        required: true
+        type: string
+      acr-registry-url:
+        description: 'The url of the ACR registry to fetch credentials from'
+        required: false
+        type: string
+        default: 'tignis.azurecr.io'
+      pip-extra-index-url:
+        description: 'The PIP_EXTRA_INDEX_URL for private pip packages'
+        required: true
+        type: string
+      push:
+        description: 'Also push the image to the remote repository'
+        required: false
+        type: string
+        default: 'true'
+      docker-build-context:
+        description: 'Build context for docker'
+        required: false
+        type: string
+        default: '.'
+      dockerfile:
+        description: 'Name of the docker file to use'
+        required: false
+        type: string
+        default: 'Dockerfile'
+      GITHUB_TOKEN:
+        description: 'Github token of the repository'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      tag:
+        description: 'Final tag used for the multi-architecture docker image'
+        value: ${{ jobs.docker-manifest.outputs.tag }}
+      
+jobs:
+  docker-amd64:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.docker.outputs.tag }}
+      digest: ${{ steps.digest.outputs.digest }}
+      image: ${{ inputs.images }}
+      clean-tag: ${{ steps.clean-tag.outputs.value }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Build and Push docker image (AMD64)
+        id: docker
+        uses: tignis/docker-github-action/action.yaml@v2.3.1
+        with:
+          images: ${{ inputs.images }}
+          acr-username: ${{ inputs.acr-username }}
+          acr-password: ${{ inputs.acr-password }}
+          acr-registry-url: ${{ inputs.acr-registry-url }}
+          pip-extra-index-url: ${{ inputs.pip-extra-index-url }}
+          push: ${{ inputs.push }}
+          docker-build-context: ${{ inputs.docker-build-context }}
+          dockerfile: ${{ inputs.dockerfile }}
+          platforms: 'linux/amd64'
+          tag-prefix: 'amd64-'
+          GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+          
+      - name: Extract clean tag
+        id: clean-tag
+        run: |
+          TAG=${{ steps.docker.outputs.tag }}
+          CLEAN_TAG=${TAG#*:amd64-}
+          echo "value=${CLEAN_TAG}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Get image digest
+        id: digest
+        run: |
+          echo "digest=$(docker inspect ${{ steps.docker.outputs.tag }} --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)" >> $GITHUB_OUTPUT
+        shell: bash
+
+  docker-arm64:
+    runs-on: [self-hosted, linux, ARM64]
+    outputs:
+      tag: ${{ steps.docker.outputs.tag }}
+      digest: ${{ steps.digest.outputs.digest }}
+      image: ${{ inputs.images }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Build and Push docker image (ARM64)
+        id: docker
+        uses: tignis/docker-github-action/action.yaml@v2.3.1
+        with:
+          images: ${{ inputs.images }}
+          acr-username: ${{ inputs.acr-username }}
+          acr-password: ${{ inputs.acr-password }}
+          acr-registry-url: ${{ inputs.acr-registry-url }}
+          pip-extra-index-url: ${{ inputs.pip-extra-index-url }}
+          push: ${{ inputs.push }}
+          docker-build-context: ${{ inputs.docker-build-context }}
+          dockerfile: ${{ inputs.dockerfile }}
+          platforms: 'linux/arm64'
+          tag-prefix: 'arm64-'
+          GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+
+      - name: Get image digest
+        id: digest
+        run: |
+          echo "digest=$(docker inspect ${{ steps.docker.outputs.tag }} --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)" >> $GITHUB_OUTPUT
+        shell: bash
+
+  docker-manifest:
+    needs: [docker-amd64, docker-arm64]
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.manifest.outputs.tag }}
+    steps:
+      - name: Login to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.acr-registry-url }}
+          username: ${{ inputs.acr-username }}
+          password: ${{ inputs.acr-password }}
+      
+      - name: Create and push manifest
+        id: manifest
+        run: |
+          IMAGE=${{ needs.docker-amd64.outputs.image }}
+          CLEAN_TAG=${{ needs.docker-amd64.outputs.clean-tag }}
+          FINAL_TAG="${IMAGE}:${CLEAN_TAG}"
+          
+          # Enable experimental features for manifest command
+          export DOCKER_CLI_EXPERIMENTAL=enabled
+          
+          echo "Creating manifest for ${FINAL_TAG}"
+          
+          # Create the manifest
+          docker manifest create ${FINAL_TAG} \
+            ${IMAGE}@${{ needs.docker-amd64.outputs.digest }} \
+            ${IMAGE}@${{ needs.docker-arm64.outputs.digest }}
+          
+          # Add architecture annotations
+          docker manifest annotate ${FINAL_TAG} \
+            ${IMAGE}@${{ needs.docker-amd64.outputs.digest }} --arch amd64
+          docker manifest annotate ${FINAL_TAG} \
+            ${IMAGE}@${{ needs.docker-arm64.outputs.digest }} --arch arm64
+
+          # Push the manifest
+          docker manifest push ${FINAL_TAG}
+          
+          echo "tag=${FINAL_TAG}" >> $GITHUB_OUTPUT
+          echo "Multi-arch manifest created and pushed: ${FINAL_TAG}"
+        shell: bash
