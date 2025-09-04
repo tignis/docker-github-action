@@ -62,7 +62,7 @@ jobs:
       
       - name: Build and Push docker image (AMD64)
         id: docker
-        uses: tignis/docker-github-action/action.yaml@v2.3.1
+        uses: tignis/docker-github-action@v2.3.1
         with:
           images: ${{ inputs.images }}
           acr-username: ${{ inputs.acr-username }}
@@ -102,7 +102,7 @@ jobs:
       
       - name: Build and Push docker image (ARM64)
         id: docker
-        uses: tignis/docker-github-action/action.yaml@v2.3.1
+        uses: tignis/docker-github-action@v2.3.1
         with:
           images: ${{ inputs.images }}
           acr-username: ${{ inputs.acr-username }}
