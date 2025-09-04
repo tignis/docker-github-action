@@ -6,23 +6,23 @@ on:
         description: 'Name of images to build'
         required: true
         type: string
-      acr-username:
-        description: 'Username to use when logging into ACR'
-        required: true
-        type: string
-      acr-password:
-        description: 'Password to use when logging into ACR'
-        required: true
-        type: string
+      acr-username: ${{ secrets.AZURE_APP_ID_ACR }}
+        # description: 'Username to use when logging into ACR'
+        # required: true
+        # type: string
+      acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
+        # description: 'Password to use when logging into ACR'
+        # required: true
+        # type: string
       acr-registry-url:
         description: 'The url of the ACR registry to fetch credentials from'
         required: false
         type: string
         default: 'tignis.azurecr.io'
-      pip-extra-index-url:
-        description: 'The PIP_EXTRA_INDEX_URL for private pip packages'
-        required: true
-        type: string
+      pip-extra-index-url: ${{secrets.PIP_EXTRA_INDEX_URL}}
+        # description: 'The PIP_EXTRA_INDEX_URL for private pip packages'
+        # required: true
+        # type: string
       push:
         description: 'Also push the image to the remote repository'
         required: false
