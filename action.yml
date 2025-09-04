@@ -114,6 +114,7 @@ runs:
         password: ${{ inputs.acr-password }}
     - name: Build and push
       id: docker_build
+      if: ${{ inputs.create-manifest != 'true' }}  # Skip this step for manifest creation
       uses: docker/build-push-action@v6
       with:
         context: ${{ inputs.docker-build-context }}
