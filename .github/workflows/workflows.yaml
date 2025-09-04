@@ -32,9 +32,12 @@ on:
         type: string
         default: ''
     secrets:
-      acr-username: ${{ secrets.AZURE_APP_ID_ACR }}
-      acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
-      pip-extra-index-url: ${{secrets.PIP_EXTRA_INDEX_URL}}
+     acr-username:
+       required: true
+     acr-password:
+       required: true
+     pip-extra-index-url:
+       required: true
     outputs:
       tag:
         description: 'Final tag used for the multi-architecture docker image'
