@@ -154,6 +154,7 @@ runs:
       run: |
         # Parse the architecture tags JSON
         ARCH_TAGS='${{ inputs.architecture-tags }}'
+        echo "Arch tags: $ARCH_TAGS"
         BASE_IMAGE=$(echo "${{ steps.meta.outputs.tags }}" | cut -d ':' -f 1)
         BASE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d ':' -f 2)
         
@@ -165,7 +166,7 @@ runs:
           DIGEST=$(echo $ARCH_TAGS | jq -r ".[\"$ARCH_TAG\"]")
           MANIFEST_CMD="$MANIFEST_CMD ${BASE_IMAGE}@${DIGEST}"
         done
-        
+        echo "Executing manifest command: $MANIFEST_CMD"
         # Execute the manifest commands
         eval $MANIFEST_CMD
         docker manifest push ${BASE_IMAGE}:${BASE_TAG}
