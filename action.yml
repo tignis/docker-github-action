@@ -105,7 +105,7 @@ runs:
           extra-index-url = ${{ inputs.pip-extra-index-url }}"
         file: ${{ inputs.dockerfile }}
     - name: Image digest
-      run: echo ${{ steps.docker_build.outputs.digest }}
+      run: echo "Image digest ${{ steps.docker_build.outputs.digest }}""
       shell: bash
     - name: Comment latest docker image
       if: github.event_name == 'pull_request'
@@ -114,6 +114,8 @@ runs:
         # Use GitHub API to create a comment on the PR
         PR_NUMBER=${{ github.event.pull_request.number }}
         COMMENT='Docker image built: `${{ steps.meta.outputs.tags }}`'
+        echo "PR number: ${PR_NUMBER}"
+        echo "Comment ${COMMENT}"
         GITHUB_TOKEN=${{ inputs.GITHUB_TOKEN }}
         COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
 
