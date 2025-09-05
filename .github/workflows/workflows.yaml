@@ -33,10 +33,13 @@ on:
         default: ''
     secrets:
      acr-username:
+       description: 'Username to use when logging into ACR'
        required: true
      acr-password:
+       description: 'Password to use when logging into ACR'
        required: true
      pip-extra-index-url:
+       description: 'The PIP_EXTRA_INDEX_URL to include as a secret in the docker build. Required to pull private pip packages.'
        required: true
     outputs:
       tag:
@@ -50,14 +53,14 @@ jobs:
       tag: ${{ steps.docker.outputs.tag }}
       digest: ${{ steps.digest.outputs.digest }}
       image: ${{ inputs.images }}
-      clean-tag: ${{ steps.clean-tag.outputs.value }}
+      tag-prefix: arm64-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       
       - name: Build and Push docker image (AMD64)
         id: docker
-        uses: tignis/docker-github-action@v2.3.1
+        uses: tignis/docker-github-action@e9179e25c21d4b6b08b8f986b6c3ead15e780a91
         with:
           images: ${{ inputs.images }}
           acr-username: ${{ secrets.acr-username }}
@@ -71,25 +74,13 @@ jobs:
           tag-prefix: 'amd64-'
           GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
           
-      - name: Extract clean tag
-        id: clean-tag
-        run: |
-          TAG=${{ steps.docker.outputs.tag }}
-          CLEAN_TAG=${TAG#*:amd64-}
-          echo "value=${CLEAN_TAG}" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Get image digest
-        id: digest
-        run: |
-          echo "digest=$(docker inspect ${{ steps.docker.outputs.tag }} --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)" >> $GITHUB_OUTPUT
-        shell: bash
 
   docker-arm64:
     runs-on: [self-hosted, linux, ARM64]
     outputs:
       tag: ${{ steps.docker.outputs.tag }}
       digest: ${{ steps.digest.outputs.digest }}
+      tag-prefix: arm64-
       image: ${{ inputs.images }}
     steps:
       - name: Checkout
@@ -97,7 +88,7 @@ jobs:
       
       - name: Build and Push docker image (ARM64)
         id: docker
-        uses: tignis/docker-github-action@v2.3.1
+        uses: tignis/docker-github-action@e9179e25c21d4b6b08b8f986b6c3ead15e780a91
         with:
           images: ${{ inputs.images }}
           acr-username: ${{ secrets.acr-username }}
@@ -110,12 +101,6 @@ jobs:
           platforms: 'linux/arm64'
           tag-prefix: 'arm64-'
           GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
-
-      - name: Get image digest
-        id: digest
-        run: |
-          echo "digest=$(docker inspect ${{ steps.docker.outputs.tag }} --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)" >> $GITHUB_OUTPUT
-        shell: bash
 
   docker-manifest:
     needs: [docker-amd64, docker-arm64]
