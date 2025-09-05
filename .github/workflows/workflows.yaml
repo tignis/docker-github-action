@@ -36,9 +36,6 @@ on:
       pip-extra-index-url:
         description: 'The PIP_EXTRA_INDEX_URL for private pip packages'
         required: true
-      REPO_TOKEN:  # Add this secret
-        description: 'GitHub token for PR comments'
-        required: false
     outputs:
       tag:
         description: 'Final tag used for the multi-architecture docker image'
@@ -58,7 +55,7 @@ jobs:
       
       - name: Build and Push docker image (AMD64)
         id: docker
-        uses: tignis/docker-github-action@416943c70773595c073c6a0295446ba01e54b9f1
+        uses: tignis/docker-github-action@31f23964bad69de8e2731bdbe4977825e3447b6b
         with:
           images: ${{ inputs.images }}
           acr-username: ${{ secrets.acr-username }}
@@ -70,7 +67,7 @@ jobs:
           dockerfile: ${{ inputs.dockerfile }}
           platforms: 'linux/amd64'
           tag-prefix: 'amd64-'
-          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
 
   docker-arm64:
@@ -86,7 +83,7 @@ jobs:
       
       - name: Build and Push docker image (ARM64)
         id: docker
-        uses: tignis/docker-github-action@416943c70773595c073c6a0295446ba01e54b9f1
+        uses: tignis/docker-github-action@31f23964bad69de8e2731bdbe4977825e3447b6b
         with:
           images: ${{ inputs.images }}
           acr-username: ${{ secrets.acr-username }}
@@ -98,7 +95,7 @@ jobs:
           dockerfile: ${{ inputs.dockerfile }}
           platforms: 'linux/arm64'
           tag-prefix: 'arm64-'
-          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker-manifest:
     needs: [docker-amd64, docker-arm64]
