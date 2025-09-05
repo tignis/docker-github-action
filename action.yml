@@ -39,7 +39,6 @@ inputs:
     default: ''
   GITHUB_TOKEN:
     description: 'Github token of the repository (automatically created by Github)'
-    default: ${{ github.token }}
     required: false
 outputs:
   tag: # id of output
