@@ -42,7 +42,7 @@ on:
     outputs:
       tag:
         description: 'Final tag used for the multi-architecture docker image'
-        value: ${{ jobs.docker.outputs.tag }}  # Changed from jobs.docker-manifest.outputs.tag
+        value: ${{ jobs.docker-manifest.outputs.tag }}
 
 permissions:
   contents: read
