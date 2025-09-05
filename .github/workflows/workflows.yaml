@@ -184,3 +184,10 @@ jobs:
           
           echo "tag=${FINAL_TAG}" >> $GITHUB_OUTPUT
           echo "Multi-arch manifest created: ${FINAL_TAG}"
+
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          COMMENT="Multi-arch manifest created: ${FINAL_TAG}"
+          GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+          COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
+
+          curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"${COMMENT}\"}"
