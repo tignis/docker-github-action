@@ -26,21 +26,19 @@ on:
         required: false
         type: string
         default: 'Dockerfile'
-      GITHUB_TOKEN:
-        description: 'Github token of the repository'
-        required: false
-        type: string
-        default: ${{ github.token }}
     secrets:
-     acr-username:
-       description: 'Username to use when logging into ACR'
-       required: true
-     acr-password:
-       description: 'Password to use when logging into ACR'
-       required: true
-     pip-extra-index-url:
-       description: 'The PIP_EXTRA_INDEX_URL to include as a secret in the docker build. Required to pull private pip packages.'
-       required: true
+      acr-username:
+        description: 'Username to use when logging into ACR'
+        required: true
+      acr-password:
+        description: 'Password to use when logging into ACR'
+        required: true
+      pip-extra-index-url:
+        description: 'The PIP_EXTRA_INDEX_URL for private pip packages'
+        required: true
+      GITHUB_TOKEN:  # Add this secret
+        description: 'GitHub token for PR comments'
+        required: false
     outputs:
       tag:
         description: 'Final tag used for the multi-architecture docker image'
@@ -72,6 +70,7 @@ jobs:
           dockerfile: ${{ inputs.dockerfile }}
           platforms: 'linux/amd64'
           tag-prefix: 'amd64-'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
 
   docker-arm64:
@@ -99,6 +98,7 @@ jobs:
           dockerfile: ${{ inputs.dockerfile }}
           platforms: 'linux/arm64'
           tag-prefix: 'arm64-'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker-manifest:
     needs: [docker-amd64, docker-arm64]
