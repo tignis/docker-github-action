@@ -4,40 +4,7 @@ GitHub action wrapping a typical Docker build for a Tignis app. This workflow as
 
 ## Usage Options
 
-### Option 1: Single Action (Simple)
-
-Use the action directly for single-platform builds or when you don't need separate architecture builds:
-
-```yaml
-name: ci
-
-on:
-  push:
-    branches:
-      - 'main'
-  pull_request:
-    branches:
-      - 'main'
-  release:
-    types: [created]
-
-jobs:
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Build and Push docker image
-        uses: tignis/docker-github-action@v2.3.1
-        with:
-          images: |
-            tignis.azurecr.io/tignis/my_app
-          acr-username: ${{ secrets.AZURE_APP_ID_ACR }}
-          acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
-          pip-extra-index-url: ${{ secrets.PIP_EXTRA_INDEX_URL }}
-```
-
-### Option 2: Multi-Architecture Workflow (Recommended)
+### Option 1: Multi-Architecture Workflow (Recommended)
 
 Use the reusable workflow for multi-architecture builds with dedicated runners for each architecture:
 
@@ -61,27 +28,11 @@ on:
     types: [created]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: Install package
-        env:
-          PIP_EXTRA_INDEX_URL: ${{ secrets.PIP_EXTRA_INDEX_URL }}
-        run: |
-          python -m pip install --upgrade pip setuptools
-          pip install '.[testing]'
-      - name: Test with pytest
-        run: pytest
 
   docker:
     needs:
       - build  # Optional: depend on tests passing first
-    uses: tignis/docker-github-action/.github/workflows/workflows.yaml@v2.3.1
+    uses: tignis/docker-github-action/.github/workflows/workflows.yaml@v2.3.2
     with:
       images: tignis.azurecr.io/tignis/my_app
     secrets:
@@ -90,6 +41,40 @@ jobs:
       pip-extra-index-url: ${{ secrets.PIP_EXTRA_INDEX_URL }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+### Option 2: Single Action (Simple)
+
+Use the action directly for single-platform builds or when you don't need separate architecture builds:
+
+```yaml
+name: ci
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    branches:
+      - 'main'
+  release:
+    types: [created]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build and Push docker image
+        uses: tignis/docker-github-action@v2.3.2
+        with:
+          images: |
+            tignis.azurecr.io/tignis/my_app
+          acr-username: ${{ secrets.AZURE_APP_ID_ACR }}
+          acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
+          pip-extra-index-url: ${{ secrets.PIP_EXTRA_INDEX_URL }}
+```
+
 
 ## Multi-Architecture Workflow Features
 
