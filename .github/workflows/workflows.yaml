@@ -60,7 +60,7 @@ jobs:
       
       - name: Build and Push docker image (AMD64)
         id: docker
-        uses: tignis/docker-github-action@b18312f688e406dec7f0d5dc964116090979679f
+        uses: tignis/docker-github-action@416943c70773595c073c6a0295446ba01e54b9f1
         with:
           images: ${{ inputs.images }}
           acr-username: ${{ secrets.acr-username }}
@@ -87,7 +87,7 @@ jobs:
       
       - name: Build and Push docker image (ARM64)
         id: docker
-        uses: tignis/docker-github-action@b18312f688e406dec7f0d5dc964116090979679f
+        uses: tignis/docker-github-action@416943c70773595c073c6a0295446ba01e54b9f1
         with:
           images: ${{ inputs.images }}
           acr-username: ${{ secrets.acr-username }}
