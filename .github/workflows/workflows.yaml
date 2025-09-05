@@ -42,7 +42,7 @@ on:
     outputs:
       tag:
         description: 'Final tag used for the multi-architecture docker image'
-        value: ${{ jobs.docker-manifest.outputs.tag }}
+        value: ${{ jobs.docker.outputs.tag }}  # Changed from jobs.docker-manifest.outputs.tag
 
 permissions:
   contents: read
@@ -194,7 +194,6 @@ jobs:
         arm64-tag: ${{ needs.docker-arm64.outputs.tag }}
       steps:
         - name: Report build status
-          id: summary
           run: |
             echo "✅ Multi-architecture Docker build completed successfully!"
             echo ""
@@ -204,3 +203,13 @@ jobs:
             echo "  Multi-arch Manifest: ${{ needs.docker-manifest.outputs.tag }}"
             echo ""
             echo "🎯 Final Result: ${{ needs.docker-manifest.outputs.tag }}"
+            
+        - name: Set summary
+          run: |
+            echo "## 🐳 Multi-Architecture Docker Build Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Architecture | Image Tag |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------------|-----------|" >> $GITHUB_STEP_SUMMARY
+            echo "| AMD64 | \`${{ needs.docker-amd64.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| ARM64 | \`${{ needs.docker-arm64.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Multi-arch** | \`${{ needs.docker-manifest.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
