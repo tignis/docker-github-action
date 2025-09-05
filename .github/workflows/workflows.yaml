@@ -26,6 +26,10 @@ on:
         required: false
         type: string
         default: 'Dockerfile'
+      GITHUB_TOKEN:
+        description: 'Github token of the repository (automatically created by Github)'
+        required: false
+        default: ${{ github.token }}
     secrets:
       acr-username:
         description: 'Username to use when logging into ACR'
@@ -67,7 +71,7 @@ jobs:
           dockerfile: ${{ inputs.dockerfile }}
           platforms: 'linux/amd64'
           tag-prefix: 'amd64-'
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ inputs.token }}
           
 
   docker-arm64:
@@ -95,7 +99,7 @@ jobs:
           dockerfile: ${{ inputs.dockerfile }}
           platforms: 'linux/arm64'
           tag-prefix: 'arm64-'
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ inputs.token }}
 
   docker-manifest:
     needs: [docker-amd64, docker-arm64]
