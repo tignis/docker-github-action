@@ -58,7 +58,7 @@ jobs:
       tag: ${{ steps.docker.outputs.tag }}
       digest: ${{ steps.digest.outputs.digest }}
       image: ${{ inputs.images }}
-      tag-prefix: arm64-
+      tag-prefix: amd64-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -127,30 +127,59 @@ jobs:
           CLEAN_TAG=${AMD64_TAG#*:amd64-}
           echo "value=${CLEAN_TAG}" >> $GITHUB_OUTPUT
     
-      - name: Create multi-arch manifest from existing images
+      - name: Get image digests instead of tags
+        id: digests
+        run: |
+          # Get the actual image digests for single-platform images
+          AMD64_MANIFEST=$(docker manifest inspect ${{ needs.docker-amd64.outputs.tag }} --verbose)
+          ARM64_MANIFEST=$(docker manifest inspect ${{ needs.docker-arm64.outputs.tag }} --verbose)
+          
+          # Extract the digest for the specific platform from manifest lists
+          AMD64_DIGEST=$(echo "$AMD64_MANIFEST" | jq -r '.[] | select(.Descriptor.platform.architecture=="amd64") | .Descriptor.digest')
+          ARM64_DIGEST=$(echo "$ARM64_MANIFEST" | jq -r '.[] | select(.Descriptor.platform.architecture=="arm64") | .Descriptor.digest')
+          
+          # If the above doesn't work (single platform images), get the manifest digest directly
+          if [ -z "$AMD64_DIGEST" ] || [ "$AMD64_DIGEST" = "null" ]; then
+            AMD64_DIGEST=$(docker manifest inspect ${{ needs.docker-amd64.outputs.tag }} | jq -r '.config.digest // .digest')
+          fi
+          
+          if [ -z "$ARM64_DIGEST" ] || [ "$ARM64_DIGEST" = "null" ]; then
+            ARM64_DIGEST=$(docker manifest inspect ${{ needs.docker-arm64.outputs.tag }} | jq -r '.config.digest // .digest')
+          fi
+          
+          echo "amd64-digest=${AMD64_DIGEST}" >> $GITHUB_OUTPUT
+          echo "arm64-digest=${ARM64_DIGEST}" >> $GITHUB_OUTPUT
+          
+          echo "AMD64 digest: ${AMD64_DIGEST}"
+          echo "ARM64 digest: ${ARM64_DIGEST}"
+    
+      - name: Create multi-arch manifest from digests
         id: final
         run: |
           IMAGE=${{ inputs.images }}
           CLEAN_TAG=${{ steps.clean-tag.outputs.value }}
           FINAL_TAG="${IMAGE}:${CLEAN_TAG}"
           
+          AMD64_DIGEST=${{ steps.digests.outputs.amd64-digest }}
+          ARM64_DIGEST=${{ steps.digests.outputs.arm64-digest }}
+          
           # Enable experimental features
           export DOCKER_CLI_EXPERIMENTAL=enabled
           
-          echo "Creating manifest ${FINAL_TAG} from existing images:"
-          echo "  AMD64: ${{ needs.docker-amd64.outputs.tag }}"
-          echo "  ARM64: ${{ needs.docker-arm64.outputs.tag }}"
+          echo "Creating manifest ${FINAL_TAG} from digests:"
+          echo "  AMD64: ${IMAGE}@${AMD64_DIGEST}"
+          echo "  ARM64: ${IMAGE}@${ARM64_DIGEST}"
           
-          # Create manifest from existing tagged images
+          # Create manifest using digests instead of tags
           docker manifest create ${FINAL_TAG} \
-            ${{ needs.docker-amd64.outputs.tag }} \
-            ${{ needs.docker-arm64.outputs.tag }}
+            ${IMAGE}@${AMD64_DIGEST} \
+            ${IMAGE}@${ARM64_DIGEST}
           
-          # Add architecture annotations
+          # Add architecture annotations using digests
           docker manifest annotate ${FINAL_TAG} \
-            ${{ needs.docker-amd64.outputs.tag }} --os linux --arch amd64
+            ${IMAGE}@${AMD64_DIGEST} --os linux --arch amd64
           docker manifest annotate ${FINAL_TAG} \
-            ${{ needs.docker-arm64.outputs.tag }} --os linux --arch arm64
+            ${IMAGE}@${ARM64_DIGEST} --os linux --arch arm64
           
           # Push the manifest
           docker manifest push ${FINAL_TAG}
