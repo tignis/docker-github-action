@@ -72,7 +72,6 @@ jobs:
           dockerfile: ${{ inputs.dockerfile }}
           platforms: 'linux/amd64'
           tag-prefix: 'amd64-'
-          GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
           
 
   docker-arm64:
@@ -100,7 +99,6 @@ jobs:
           dockerfile: ${{ inputs.dockerfile }}
           platforms: 'linux/arm64'
           tag-prefix: 'arm64-'
-          GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
 
   docker-manifest:
     needs: [docker-amd64, docker-arm64]
