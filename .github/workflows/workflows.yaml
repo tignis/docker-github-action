@@ -184,3 +184,23 @@ jobs:
           
           echo "tag=${FINAL_TAG}" >> $GITHUB_OUTPUT
           echo "Multi-arch manifest created: ${FINAL_TAG}"
+
+  docker:
+      needs: [docker-amd64, docker-arm64, docker-manifest]
+      runs-on: ubuntu-latest
+      outputs:
+        tag: ${{ needs.docker-manifest.outputs.tag }}
+        amd64-tag: ${{ needs.docker-amd64.outputs.tag }}
+        arm64-tag: ${{ needs.docker-arm64.outputs.tag }}
+      steps:
+        - name: Report build status
+          id: summary
+          run: |
+            echo "✅ Multi-architecture Docker build completed successfully!"
+            echo ""
+            echo "📦 Build Summary:"
+            echo "  AMD64 Image: ${{ needs.docker-amd64.outputs.tag }}"
+            echo "  ARM64 Image: ${{ needs.docker-arm64.outputs.tag }}"
+            echo "  Multi-arch Manifest: ${{ needs.docker-manifest.outputs.tag }}"
+            echo ""
+            echo "🎯 Final Result: ${{ needs.docker-manifest.outputs.tag }}"
