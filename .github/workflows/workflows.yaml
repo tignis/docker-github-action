@@ -42,7 +42,7 @@ on:
     outputs:
       tag:
         description: 'Final tag used for the multi-architecture docker image'
-        value: ${{ jobs.status-report.outputs.tag }}
+        value: ${{ jobs.docker-manifest.outputs.tag }}
 
 permissions:
   contents: read
@@ -185,21 +185,11 @@ jobs:
           echo "tag=${FINAL_TAG}" >> $GITHUB_OUTPUT
           echo "Multi-arch manifest created: ${FINAL_TAG}"
           
-      - name: Set GitHub commit status
+      - name: Report build status
         if: always()
         run: |
-          echo "Setting GitHub commit status to success"
-          curl -s \
-            -X POST \
-            -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
-            -d '{
-              "state": "success",
-              "context": "docker/multi-arch-build",
-              "description": "Multi-architecture build completed",
-              "target_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            }'
+          echo "✅ Docker multi-arch build completed successfully!"
+          echo "Build status: success"
             
       - name: Workflow conclusion
         run: |
@@ -212,25 +202,24 @@ jobs:
     outputs:
       tag: ${{ needs.docker-manifest.outputs.tag }}
     steps:
-      - name: Report status to GitHub
+      - name: Mark build as complete
         if: always()
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GH_TOKEN }}
-          script: |
-            const { owner, repo } = context.repo;
-            const sha = context.sha;
-            
-            await github.rest.repos.createCommitStatus({
-              owner,
-              repo,
-              sha,
-              state: 'success',
-              context: 'Multi-Architecture Docker Build',
-              description: 'Build completed successfully'
-            });
+        run: |
+          echo "Marking build as complete"
+          echo "Build ID: ${{ github.run_id }}"
+          echo "Repository: ${{ github.repository }}"
             
       - name: Report build summary
         run: |
           echo "✅ Multi-architecture Docker build completed successfully!"
           echo "🎯 Final Result: ${{ needs.docker-manifest.outputs.tag }}"
+          
+  # This job serves as a final indicator that the workflow has completed successfully
+  workflow-completed:
+    needs: [status-report]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Final status
+        run: |
+          echo "✅ All Docker build steps completed successfully!"
+          echo "Build workflow completed at $(date)"
