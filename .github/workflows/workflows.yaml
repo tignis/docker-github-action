@@ -30,7 +30,7 @@ on:
         description: 'Github token of the repository'
         required: false
         type: string
-        default: ''
+        default: ${{ github.token }}
     secrets:
      acr-username:
        description: 'Username to use when logging into ACR'
