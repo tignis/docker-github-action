@@ -41,6 +41,14 @@ inputs:
     description: 'Github token of the repository (automatically created by Github)'
     default: ${{ github.token }}
     required: false
+  depot-token:
+    description: 'Depot token for authentication (optional, enables Depot builds)'
+    required: false
+    default: ''
+  depot-project:
+    description: 'Depot project ID (optional, required if using Depot)'
+    required: false
+    default: ''
 outputs:
   tag: # id of output
     description: 'Tag used for the docker image'
@@ -93,7 +101,7 @@ runs:
         password: ${{ inputs.acr-password }}
     - name: Build and push
       id: docker_build
-      uses: docker/build-push-action@v6
+      uses: depot/build-push-action@v1
       with:
         context: ${{ inputs.docker-build-context }}
         push: ${{ inputs.push }}
@@ -104,6 +112,8 @@ runs:
           "pipconf=[global]
           extra-index-url = ${{ inputs.pip-extra-index-url }}"
         file: ${{ inputs.dockerfile }}
+        token: ${{ inputs.depot-token }}
+        project: ${{ inputs.depot-project }}
     - name: Image digest
       run: echo ${{ steps.docker_build.outputs.digest }}
       shell: bash
