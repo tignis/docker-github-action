@@ -108,9 +108,10 @@ runs:
         registry: 'tignis.azurecr.io'
         username: ${{ inputs.acr-username }}
         password: ${{ inputs.acr-password }}
-    - name: Build and push
-      id: docker_build
+    - name: Build and push (Depot)
+      id: docker_build_depot
       uses: depot/build-push-action@v1
+      if: ${{ inputs.depot-token != '' }}
       with:
         context: ${{ inputs.docker-build-context }}
         push: ${{ inputs.push }}
@@ -124,8 +125,23 @@ runs:
         target: ${{ inputs.target }}
         token: ${{ inputs.depot-token }}
         project: ${{ inputs.depot-project }}
+    - name: Build and push (Docker)
+      id: docker_build_standard
+      uses: docker/build-push-action@v6
+      if: ${{ inputs.depot-token == '' }}
+      with:
+        context: ${{ inputs.docker-build-context }}
+        push: ${{ inputs.push }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: ${{inputs.platforms}}
+        secrets: |
+          "pipconf=[global]
+          extra-index-url = ${{ inputs.pip-extra-index-url }}"
+        file: ${{ inputs.dockerfile }}
+        target: ${{ inputs.target }}
     - name: Image digest
-      run: echo ${{ steps.docker_build.outputs.digest }}
+      run: echo ${{ steps.docker_build_depot.outputs.digest || steps.docker_build_standard.outputs.digest }}
       shell: bash
     - name: Comment latest docker image
       if: github.event_name == 'pull_request'
