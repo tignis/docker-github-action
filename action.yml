@@ -16,7 +16,12 @@ inputs:
     default: 'tignis.azurecr.io'
   pip-extra-index-url:
     description: 'The PIP_EXTRA_INDEX_URL to include as a secret in the docker build. Required to pull private pip packages.'
-    required: true
+    required: false
+    default: ''
+  uv-index-url:
+    description: 'The UV index URL to include as a secret in the docker build. Required for UV-based builds with private packages.'
+    required: false
+    default: ''
   push:
     description: 'Also push the image to the remote repository'
     required: false
@@ -108,6 +113,30 @@ runs:
         registry: 'tignis.azurecr.io'
         username: ${{ inputs.acr-username }}
         password: ${{ inputs.acr-password }}
+    - name: Create build secrets
+      run: |
+        mkdir -p /tmp/build-secrets
+
+        # Create pip config
+        cat > /tmp/build-secrets/pipconf << EOF
+        [global]
+        extra-index-url = ${{ inputs.pip-extra-index-url }}
+        EOF
+
+        # Create UV config if UV index URL is provided
+        if [ -n "${{ inputs.uv-index-url }}" ]; then
+          cat > /tmp/build-secrets/uvconfig.toml << EOF
+        [[index]]
+        url = "${{ inputs.uv-index-url }}"
+
+        [[index]]
+        url = "https://pypi.org/simple"
+        EOF
+        else
+          # Create empty file if not using UV
+          touch /tmp/build-secrets/uvconfig.toml
+        fi
+      shell: bash
     - name: Build and push
       id: docker_build
       uses: depot/build-push-action@v1
@@ -117,9 +146,9 @@ runs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         platforms: ${{inputs.platforms}}
-        secrets: |
-          "pipconf=[global]
-          extra-index-url = ${{ inputs.pip-extra-index-url }}"
+        secret-files: |
+          pipconf=/tmp/build-secrets/pipconf
+          uvconfig=/tmp/build-secrets/uvconfig.toml
         file: ${{ inputs.dockerfile }}
         target: ${{ inputs.target }}
         token: ${{ inputs.depot-token }}
