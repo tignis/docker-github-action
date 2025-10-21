@@ -137,8 +137,9 @@ runs:
           touch /tmp/build-secrets/uvconfig.toml
         fi
       shell: bash
-    - name: Build and push
-      id: docker_build
+    - name: Build and push with Depot
+      id: docker_build_depot
+      if: ${{ inputs.depot-token != '' }}
       uses: depot/build-push-action@v1
       with:
         context: ${{ inputs.docker-build-context }}
@@ -153,8 +154,23 @@ runs:
         target: ${{ inputs.target }}
         token: ${{ inputs.depot-token }}
         project: ${{ inputs.depot-project }}
+    - name: Build and push with Docker
+      id: docker_build_standard
+      if: ${{ inputs.depot-token == '' }}
+      uses: docker/build-push-action@v6
+      with:
+        context: ${{ inputs.docker-build-context }}
+        push: ${{ inputs.push }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: ${{inputs.platforms}}
+        secrets: |
+          pipconf=/tmp/build-secrets/pipconf
+          uvconfig=/tmp/build-secrets/uvconfig.toml
+        file: ${{ inputs.dockerfile }}
+        target: ${{ inputs.target }}
     - name: Image digest
-      run: echo ${{ steps.docker_build.outputs.digest }}
+      run: echo ${{ steps.docker_build_depot.outputs.digest || steps.docker_build_standard.outputs.digest }}
       shell: bash
     - name: Comment latest docker image
       if: github.event_name == 'pull_request'
