@@ -164,7 +164,7 @@ runs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         platforms: ${{inputs.platforms}}
-        secrets: |
+        secret-files: |
           pipconf=/tmp/build-secrets/pipconf
           uvconfig=/tmp/build-secrets/uvconfig.toml
         file: ${{ inputs.dockerfile }}
