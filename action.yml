@@ -154,7 +154,7 @@ runs:
         target: ${{ inputs.target }}
         token: ${{ inputs.depot-token }}
         project: ${{ inputs.depot-project }}
-    - name: Build and push with Docker
+    - name: Build and push with Docker (AMD64 only fallback)
       id: docker_build_standard
       if: ${{ inputs.depot-token == '' }}
       uses: docker/build-push-action@v6
@@ -163,7 +163,7 @@ runs:
         push: ${{ inputs.push }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        platforms: ${{inputs.platforms}}
+        platforms: linux/amd64
         secret-files: |
           pipconf=/tmp/build-secrets/pipconf
           uvconfig=/tmp/build-secrets/uvconfig.toml

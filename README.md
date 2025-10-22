@@ -1,37 +1,235 @@
 # docker-github-action
 
-GitHub action wrapping a typical Docker build for a Tignis app. This workflow assumes that you will tag images based on the git commit hash for pull requests and pushes to branches, and for releases it will use the semver tag of the release.
+GitHub action for building and pushing Docker images to Azure Container Registry. Uses Depot for fast multi-arch builds (ARM64 + AMD64). Falls back to AMD64-only if Depot unavailable.
 
-## Usage Options
-
-### Option 1: Multi-Architecture Workflow (Recommended)
-
-Use the reusable workflow for multi-architecture builds with dedicated runners for each architecture:
+## Quick Start
 
 ```yaml
 name: ci
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
-
 on:
   push:
-    branches:
-      - 'main'
+    branches: ['main']
   pull_request:
-    branches:
-      - 'main'
-      - 'dev'
-  release:
-    types: [created]
+    branches: ['main']
 
 jobs:
-
   docker:
-    needs:
-      - build  # Optional: depend on tests passing first
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and Push docker image
+        uses: tignis/docker-github-action@depot-integration
+        with:
+          images: tignis.azurecr.io/tignis/my_app
+          acr-username: ${{ secrets.AZURE_APP_ID_ACR }}
+          acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
+          pip-extra-index-url: ${{ secrets.PIP_EXTRA_INDEX_URL }}
+          platforms: linux/amd64,linux/arm64
+          depot-token: ${{ secrets.DEPOT_TOKEN }}
+          depot-project: your-depot-project-id
+```
+
+## Build Modes
+
+**Default:** Depot multi-arch builds (ARM64 + AMD64, 1-3 min). `DEPOT_TOKEN` is set at organization level.
+
+**Automatic fallback:** AMD64-only Docker build for catastrophic scenarios (AWS/Depot outage). Enables shipping customer fixes when Depot unavailable. AMD64 sufficient for customer deployments.
+
+To trigger: Settings → Secrets and Variables → Actions → Add `DEPOT_TOKEN=''` (empty string) at repo level.
+
+For multi-arch fallback, see [Fallback Options](#fallback-options).
+
+## Secrets
+
+Configure in repository/organization settings:
+
+**Required:**
+- `AZURE_APP_ID_ACR` / `AZURE_PASSWORD_ACR` - ACR credentials
+
+**Required for private packages:**
+- `PIP_EXTRA_INDEX_URL` - When using pip
+- `UV_INDEX_URL` - When using UV
+
+**Default (set at organization level):**
+- `DEPOT_TOKEN` - Enables fast multi-arch Depot builds. Falls back to AMD64-only if not set
+
+## Package Management
+
+### Using pip (Standard)
+
+Set `pip-extra-index-url` secret and mount it in your Dockerfile:
+
+```dockerfile
+RUN --mount=type=secret,id=pipconf,target=/etc/pip.conf \
+    --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+```
+
+### Using UV (Fast)
+
+Set `uv-index-url` secret:
+
+```dockerfile
+RUN --mount=type=secret,id=uvconfig,target=/root/.config/uv/uv.toml \
+    --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -r requirements.txt
+```
+
+## Dockerfile Best Practices
+
+Use multi-stage builds with proper layer caching:
+
+```dockerfile
+# ==============================================
+# BUILD STAGE - Install dependencies
+# ==============================================
+FROM python:3.12-slim AS build
+
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /build
+
+# Copy requirements first for layer caching
+COPY requirements.txt .
+
+# Install dependencies with secret and cache mounts
+RUN --mount=type=secret,id=pipconf,target=/etc/pip.conf \
+    --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+# Copy source code (separate layer)
+COPY . .
+
+# Install application
+RUN --mount=type=secret,id=pipconf,target=/etc/pip.conf \
+    --mount=type=cache,target=/root/.cache/pip \
+    pip install .
+
+# ==============================================
+# TEST STAGE - Run tests
+# ==============================================
+FROM build AS test
+
+RUN pytest ./tests/ --disable-warnings -n auto
+
+# ==============================================
+# RUNTIME STAGE - Minimal production image
+# ==============================================
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Copy only installed packages from build stage
+COPY --from=build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=build /usr/local/bin /usr/local/bin
+
+ENTRYPOINT ["python", "-m", "your_app"]
+```
+
+**Key points:**
+- `test` stage runs automatically during build (no separate CI job needed)
+- Build fails if tests fail (automatic quality gate)
+- Layer caching optimizes rebuild times
+- Final image is minimal (no source code, no build tools)
+
+## Examples
+
+### Basic Multi-Platform Build
+
+```yaml
+- uses: tignis/docker-github-action@depot-integration
+  with:
+    images: tignis.azurecr.io/tignis/my_app
+    acr-username: ${{ secrets.AZURE_APP_ID_ACR }}
+    acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
+    pip-extra-index-url: ${{ secrets.PIP_EXTRA_INDEX_URL }}
+    platforms: linux/amd64,linux/arm64
+    depot-token: ${{ secrets.DEPOT_TOKEN }}
+    depot-project: 1klzrnw0qh
+```
+
+### Single Platform (AMD64 only)
+
+```yaml
+- uses: tignis/docker-github-action@depot-integration
+  with:
+    images: tignis.azurecr.io/tignis/my_app
+    acr-username: ${{ secrets.AZURE_APP_ID_ACR }}
+    acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
+    platforms: linux/amd64
+    depot-token: ${{ secrets.DEPOT_TOKEN }}
+    depot-project: 1klzrnw0qh
+```
+
+### UV-Based Build
+
+```yaml
+- uses: tignis/docker-github-action@depot-integration
+  with:
+    images: tignis.azurecr.io/tignis/my_app
+    acr-username: ${{ secrets.AZURE_APP_ID_ACR }}
+    acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
+    uv-index-url: ${{ secrets.UV_INDEX_URL }}
+    depot-token: ${{ secrets.DEPOT_TOKEN }}
+    depot-project: 1klzrnw0qh
+```
+
+## Troubleshooting
+
+### Build fails with "Configuration file could not be loaded"
+
+**Cause:** The pip.conf secret file has invalid formatting.
+
+**Fix:** Ensure your `pip-extra-index-url` secret is set correctly in repository settings.
+
+### Build only produces AMD64 image (no ARM64)
+
+**Cause:** Automatic fallback to Docker build (Depot service unavailable or token expired).
+
+**Fix:** Verify that:
+1. Depot service is operational
+2. `depot-project` parameter is specified in the workflow
+3. The Depot project ID is correct
+
+### Tests fail but build continues
+
+**Cause:** Docker test stage not properly configured.
+
+**Fix:** Ensure your Dockerfile has a `test` stage and the action doesn't use `target` to skip it:
+
+```dockerfile
+FROM build AS test
+RUN pytest ./tests/ --disable-warnings -n auto
+```
+
+## Fallback Options
+
+### v2.3.2 with Self-Hosted Runners (Manual)
+
+For multi-arch builds during Depot outages, temporarily switch to v2.3.2 with self-hosted ARM64 runners:
+
+**Current v3:**
+```yaml
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: tignis/docker-github-action@v3
+        with:
+          images: tignis.azurecr.io/tignis/my_app
+          depot-token: ${{ secrets.DEPOT_TOKEN }}
+```
+
+**Emergency switch to v2.3.2:**
+```yaml
+jobs:
+  docker:
     uses: tignis/docker-github-action/.github/workflows/workflows.yaml@v2.3.2
     with:
       images: tignis.azurecr.io/tignis/my_app
@@ -41,132 +239,3 @@ jobs:
       pip-extra-index-url: ${{ secrets.PIP_EXTRA_INDEX_URL }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
-
-### Option 2: Single Action (Simple)
-
-Use the action directly for single-platform builds or when you don't need separate architecture builds:
-
-```yaml
-name: ci
-
-on:
-  push:
-    branches:
-      - 'main'
-  pull_request:
-    branches:
-      - 'main'
-  release:
-    types: [created]
-
-jobs:
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Build and Push docker image
-        uses: tignis/docker-github-action@v2.3.2
-        with:
-          images: |
-            tignis.azurecr.io/tignis/my_app
-          acr-username: ${{ secrets.AZURE_APP_ID_ACR }}
-          acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
-          pip-extra-index-url: ${{ secrets.PIP_EXTRA_INDEX_URL }}
-```
-
-
-## Multi-Architecture Workflow Features
-
-The reusable workflow (`workflows.yaml`) provides:
-
-- **Separate Architecture Builds**: AMD64 builds on GitHub-hosted runners, ARM64 builds on self-hosted runners
-- **Multi-Architecture Manifest**: Automatically creates a manifest list that supports both architectures
-- **Status Reporting**: Provides a unified status check for branch protection rules
-- **PR Comments**: Automatically comments on pull requests with the built image tag
-- **Build Summary**: Creates detailed build summaries in GitHub Actions
-
-### Workflow Jobs
-
-The multi-architecture workflow consists of:
-
-1. **docker-amd64**: Builds AMD64 image on `ubuntu-latest`
-2. **docker-arm64**: Builds ARM64 image on `[self-hosted, linux, ARM64]`
-3. **docker-manifest**: Creates multi-architecture manifest from individual builds
-4. **docker**: Summary job that reports overall build status
-
-### Required Secrets
-
-For the multi-architecture workflow, you need these repository secrets:
-
-- `AZURE_APP_ID_ACR`: Azure Container Registry username
-- `AZURE_PASSWORD_ACR`: Azure Container Registry password  
-- `PIP_EXTRA_INDEX_URL`: Private pip package index URL
-- `GITHUB_TOKEN`: Automatically provided by GitHub (no setup needed)
-
-## Input Options
-
-### Action Inputs (Option 1)
-
-`images`: A list of names to use to tag your image with. Should be a multiline string with each line containing a single name.
-
-`push`: Boolean to determine if the image should be pushed to the remote repository. Defaults to `true`.
-
-`acr-username`: The username to use to login to ACR. Fetch this value from a GitHub secret.
-
-`acr-password`: The password to use to login to ACR. Fetch this value from a GitHub secret.
-
-`acr-registry-url`: The URL of which repository to use in ACR. Defaults to `tignis.azurecr.io`.
-
-`pip-extra-index-url`: The extra index URL for pip to fetch packages from our JFrog repository. Fetch this value from a secret.
-
-`docker-build-context`: What directory to use as the build context for Docker. Defaults to the current directory.
-**Note:** If changing the build context, ensure that the `dockerfile` parameter described below is also adjusted to be prefixed with the build context. For example if you have `docker-build-context: ./tignis/app`, then you'll also likely set `dockerfile: ./tignis/app/Dockerfile` too.
-
-`dockerfile`: The name of the Dockerfile to use. Defaults to `Dockerfile`.
-**Note:** This path is always from the root of the repository, not from the root of the build-context.
-
-`platforms`: A comma separated list of platforms to build images for. Defaults to `linux/amd64,linux/arm64`.
-
-`tag-prefix`: A prefix to add to the generated image tag. Defaults to an empty string.
-
-### Workflow Inputs (Option 2)
-
-The reusable workflow accepts similar inputs but through the `with:` section:
-
-- `images`: Container image name (required)
-- `acr-registry-url`: Registry URL (optional, defaults to `tignis.azurecr.io`)
-- `push`: Whether to push images (optional, defaults to `true`)
-- `docker-build-context`: Build context directory (optional, defaults to `.`)
-- `dockerfile`: Dockerfile name (optional, defaults to `Dockerfile`)
-
-## Outputs
-
-### Action Outputs (Option 1)
-
-`tag`: The image tag that was generated.
-
-### Workflow Outputs (Option 2)
-
-`tag`: The final multi-architecture manifest tag that was created.
-
-## Self-Hosted Runner Requirements
-
-For the multi-architecture workflow to work properly, you need:
-
-- Self-hosted runner with `[self-hosted, linux, ARM64]` labels
-- Docker installed and configured on the ARM64 runner
-- Access to your container registry from the self-hosted runner
-
-## Migration Guide
-
-To migrate from the single action to the multi-architecture workflow:
-
-1. Replace the `steps:` section with a `uses:` reference to the workflow
-2. Move your parameters from `with:` (action) to `with:` (workflow) 
-3. Move secrets from `with:` to the `secrets:` section
-4. Add `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` to secrets
-5. Add required permissions to your workflow file
-6. Ensure you have ARM64 self-hosted runners available
-
-The multi-architecture workflow is recommended for production applications that need to support both AMD64 and ARM64 platforms.
