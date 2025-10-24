@@ -58,6 +58,10 @@ inputs:
     description: 'Target build stage (optional, for multi-stage builds)'
     required: false
     default: ''
+  pre-build-targets:
+    description: 'Comma-separated list of build targets to run before final build (e.g., "lint,test" for validation stages)'
+    required: false
+    default: ''
 outputs:
   tag: # id of output
     description: 'Tag used for the docker image'
@@ -137,6 +141,23 @@ runs:
           touch /tmp/build-secrets/uvconfig.toml
         fi
       shell: bash
+    - name: Run pre-build targets with Depot
+      if: ${{ inputs.depot-token != '' && inputs.pre-build-targets != '' }}
+      shell: bash
+      run: |
+        IFS=',' read -ra TARGETS <<< "${{ inputs.pre-build-targets }}"
+        for target in "${TARGETS[@]}"; do
+          echo "Building target: $target"
+          depot build \
+            --project ${{ inputs.depot-project }} \
+            --token ${{ inputs.depot-token }} \
+            --platform ${{ inputs.platforms }} \
+            --target "$target" \
+            --secret id=pipconf,src=/tmp/build-secrets/pipconf \
+            --secret id=uvconfig,src=/tmp/build-secrets/uvconfig.toml \
+            --file ${{ inputs.dockerfile }} \
+            ${{ inputs.docker-build-context }}
+        done
     - name: Build and push with Depot
       id: docker_build_depot
       if: ${{ inputs.depot-token != '' }}
