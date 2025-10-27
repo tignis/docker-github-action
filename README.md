@@ -29,7 +29,7 @@ jobs:
           pip-extra-index-url: ${{ secrets.PIP_EXTRA_INDEX_URL }}
           platforms: linux/amd64,linux/arm64
           depot-token: ${{ secrets.DEPOT_TOKEN }}
-          depot-project: your-depot-project-id
+          depot-project: ${{ secrets.DEPOT_PROJECT }}
 ```
 
 ## Build Modes
@@ -150,7 +150,7 @@ ENTRYPOINT ["python", "-m", "your_app"]
     pip-extra-index-url: ${{ secrets.PIP_EXTRA_INDEX_URL }}
     platforms: linux/amd64,linux/arm64
     depot-token: ${{ secrets.DEPOT_TOKEN }}
-    depot-project: 1klzrnw0qh
+    depot-project: ${{ secrets.DEPOT_PROJECT }}
 ```
 
 ### Single Platform (AMD64 only)
@@ -163,7 +163,7 @@ ENTRYPOINT ["python", "-m", "your_app"]
     acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
     platforms: linux/amd64
     depot-token: ${{ secrets.DEPOT_TOKEN }}
-    depot-project: 1klzrnw0qh
+    depot-project: ${{ secrets.DEPOT_PROJECT }}
 ```
 
 ### UV-Based Build
@@ -176,7 +176,7 @@ ENTRYPOINT ["python", "-m", "your_app"]
     acr-password: ${{ secrets.AZURE_PASSWORD_ACR }}
     uv-index-url: ${{ secrets.UV_INDEX_URL }}
     depot-token: ${{ secrets.DEPOT_TOKEN }}
-    depot-project: 1klzrnw0qh
+    depot-project: ${{ secrets.DEPOT_PROJECT }}
 ```
 
 ## Troubleshooting
