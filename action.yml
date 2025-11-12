@@ -58,6 +58,10 @@ inputs:
     description: 'Target build stage (optional, for multi-stage builds)'
     required: false
     default: ''
+  pre-build-targets:
+    description: 'Comma-separated list of build targets to run before final build (e.g., "lint,test" for validation stages)'
+    required: false
+    default: ''
 outputs:
   tag: # id of output
     description: 'Tag used for the docker image'
@@ -137,6 +141,54 @@ runs:
           touch /tmp/build-secrets/uvconfig.toml
         fi
       shell: bash
+    - name: Auto-detect build stages
+      id: detect-stages
+      run: |
+        DOCKERFILE="${{ inputs.docker-build-context }}/${{ inputs.dockerfile }}"
+        DETECTED_TARGETS=""
+
+        # Check for lint stage
+        if grep -q "^FROM .* AS lint" "$DOCKERFILE"; then
+          echo "Detected lint stage"
+          DETECTED_TARGETS="lint"
+        fi
+
+        # Check for test stage
+        if grep -q "^FROM .* AS test" "$DOCKERFILE"; then
+          echo "Detected test stage"
+          if [ -n "$DETECTED_TARGETS" ]; then
+            DETECTED_TARGETS="${DETECTED_TARGETS},test"
+          else
+            DETECTED_TARGETS="test"
+          fi
+        fi
+
+        # Use detected targets if pre-build-targets not explicitly set
+        if [ -z "${{ inputs.pre-build-targets }}" ]; then
+          echo "auto-targets=$DETECTED_TARGETS" >> $GITHUB_OUTPUT
+          echo "Using auto-detected targets: $DETECTED_TARGETS"
+        else
+          echo "auto-targets=${{ inputs.pre-build-targets }}" >> $GITHUB_OUTPUT
+          echo "Using explicitly configured targets: ${{ inputs.pre-build-targets }}"
+        fi
+      shell: bash
+    - name: Run pre-build targets with Depot
+      if: ${{ inputs.depot-token != '' && steps.detect-stages.outputs.auto-targets != '' }}
+      shell: bash
+      run: |
+        IFS=',' read -ra TARGETS <<< "${{ steps.detect-stages.outputs.auto-targets }}"
+        for target in "${TARGETS[@]}"; do
+          echo "Building target: $target"
+          depot build \
+            --project ${{ inputs.depot-project }} \
+            --token ${{ inputs.depot-token }} \
+            --platform ${{ inputs.platforms }} \
+            --target "$target" \
+            --secret id=pipconf,src=/tmp/build-secrets/pipconf \
+            --secret id=uvconfig,src=/tmp/build-secrets/uvconfig.toml \
+            --file ${{ inputs.dockerfile }} \
+            ${{ inputs.docker-build-context }}
+        done
     - name: Build and push with Depot
       id: docker_build_depot
       if: ${{ inputs.depot-token != '' }}
