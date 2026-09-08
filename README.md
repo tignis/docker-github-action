@@ -52,6 +52,7 @@ Configure in repository/organization settings:
 **Required for private packages:**
 - `PIP_EXTRA_INDEX_URL` - When using pip
 - `UV_INDEX_URL` - When using UV
+- `ARTIFACTORY_TOKEN` - When using npm against private (Artifactory) scopes
 
 **Default (set at organization level):**
 - `DEPOT_TOKEN` - Enables fast multi-arch Depot builds. Falls back to AMD64-only if not set
@@ -77,6 +78,25 @@ RUN --mount=type=secret,id=uvconfig,target=/root/.config/uv/uv.toml \
     --mount=type=cache,target=/root/.cache/uv \
     uv pip install -r requirements.txt
 ```
+
+### Using npm (Artifactory)
+
+Check a `.npmrc` into the repo root with a `${ARTIFACTORY_TOKEN}` placeholder, e.g.:
+
+```ini
+@myorg:registry=https://mycompany.jfrog.io/artifactory/api/npm/my-npm/
+//mycompany.jfrog.io/artifactory/api/npm/my-npm/:_authToken=${ARTIFACTORY_TOKEN}
+always-auth=true
+```
+
+Set `artifactory-token` and mount it in your Dockerfile:
+
+```dockerfile
+RUN --mount=type=secret,id=npmrc,target=/app/.npmrc \
+    npm ci
+```
+
+If no `.npmrc` exists in the repo, or `artifactory-token` isn't set, the mounted secret is just empty — harmless for a Dockerfile that doesn't reference it.
 
 ## Dockerfile Best Practices
 

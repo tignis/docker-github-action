@@ -22,6 +22,10 @@ inputs:
     description: 'The UV index URL to include as a secret in the docker build. Required for UV-based builds with private packages.'
     required: false
     default: ''
+  artifactory-token:
+    description: 'JFrog Artifactory token used to fill in an `${ARTIFACTORY_TOKEN}` placeholder in a .npmrc checked into the repo root, included as an `npmrc` secret in the docker build. Optional — only needed if the Dockerfile mounts an `npmrc` secret for npm install/ci against private scopes.'
+    required: false
+    default: ''
   push:
     description: 'Also push the image to the remote repository'
     required: false
@@ -136,6 +140,16 @@ runs:
           # Create empty file if not using UV
           touch /tmp/build-secrets/uvconfig.toml
         fi
+
+        # Create npmrc for private npm scopes (Artifactory), from the
+        # caller's checked-in .npmrc with the token substituted in
+        if [ -f ".npmrc" ] && [ -n "${{ inputs.artifactory-token }}" ]; then
+          ARTIFACTORY_TOKEN="${{ inputs.artifactory-token }}" envsubst '$ARTIFACTORY_TOKEN' < .npmrc > /tmp/build-secrets/npmrc
+        elif [ -f ".npmrc" ]; then
+          cp .npmrc /tmp/build-secrets/npmrc
+        else
+          touch /tmp/build-secrets/npmrc
+        fi
       shell: bash
     - name: Build and push with Depot
       id: docker_build_depot
@@ -150,6 +164,7 @@ runs:
         secret-files: |
           pipconf=/tmp/build-secrets/pipconf
           uvconfig=/tmp/build-secrets/uvconfig.toml
+          npmrc=/tmp/build-secrets/npmrc
         file: ${{ inputs.dockerfile }}
         target: ${{ inputs.target }}
         token: ${{ inputs.depot-token }}
@@ -167,6 +182,7 @@ runs:
         secret-files: |
           pipconf=/tmp/build-secrets/pipconf
           uvconfig=/tmp/build-secrets/uvconfig.toml
+          npmrc=/tmp/build-secrets/npmrc
         file: ${{ inputs.dockerfile }}
         target: ${{ inputs.target }}
     - name: Image digest
