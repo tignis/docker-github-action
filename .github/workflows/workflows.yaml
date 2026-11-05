@@ -55,7 +55,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
   pull-requests: write
 
 jobs:
@@ -68,7 +67,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+        with:
+          persist-credentials: false
+
       - name: Build and Push docker image (AMD64)
         id: docker
         uses: tignis/docker-github-action@v3.2.0
@@ -97,7 +98,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+        with:
+          persist-credentials: false
+
       - name: Build and Push docker image (ARM64)
         id: docker
         uses: tignis/docker-github-action@v3.2.0
@@ -118,6 +121,8 @@ jobs:
 
   docker-manifest:
     needs: [docker-amd64, docker-arm64]
+    # Without a push there are no per-arch tags to merge.
+    if: ${{ inputs.push == 'true' }}
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.final.outputs.tag }}
@@ -128,77 +133,86 @@ jobs:
           registry: ${{ inputs.acr-registry-url }}
           username: ${{ secrets.acr-username }}
           password: ${{ secrets.acr-password }}
-    
+
+      # Values reach the shell through env, never interpolated into the script.
       - name: Extract clean tag
         id: clean-tag
+        env:
+          AMD64_TAG: ${{ needs.docker-amd64.outputs.tag }}
         run: |
-          AMD64_TAG=${{ needs.docker-amd64.outputs.tag }}
-          CLEAN_TAG=${AMD64_TAG#*:amd64-}
-          echo "value=${CLEAN_TAG}" >> $GITHUB_OUTPUT
-    
+          CLEAN_TAG="${AMD64_TAG#*:amd64-}"
+          echo "value=${CLEAN_TAG}" >> "$GITHUB_OUTPUT"
+
       - name: Get image digests instead of tags
         id: digests
+        env:
+          AMD64_TAG: ${{ needs.docker-amd64.outputs.tag }}
+          ARM64_TAG: ${{ needs.docker-arm64.outputs.tag }}
         run: |
           # Get the actual image digests for single-platform images
-          AMD64_MANIFEST=$(docker manifest inspect ${{ needs.docker-amd64.outputs.tag }} --verbose)
-          ARM64_MANIFEST=$(docker manifest inspect ${{ needs.docker-arm64.outputs.tag }} --verbose)
-          
+          AMD64_MANIFEST=$(docker manifest inspect "$AMD64_TAG" --verbose)
+          ARM64_MANIFEST=$(docker manifest inspect "$ARM64_TAG" --verbose)
+
           # Extract the digest for the specific platform from manifest lists
           AMD64_DIGEST=$(echo "$AMD64_MANIFEST" | jq -r '.[] | select(.Descriptor.platform.architecture=="amd64") | .Descriptor.digest')
           ARM64_DIGEST=$(echo "$ARM64_MANIFEST" | jq -r '.[] | select(.Descriptor.platform.architecture=="arm64") | .Descriptor.digest')
-          
+
           # If the above doesn't work (single platform images), get the manifest digest directly
           if [ -z "$AMD64_DIGEST" ] || [ "$AMD64_DIGEST" = "null" ]; then
-            AMD64_DIGEST=$(docker manifest inspect ${{ needs.docker-amd64.outputs.tag }} | jq -r '.config.digest // .digest')
+            AMD64_DIGEST=$(docker manifest inspect "$AMD64_TAG" | jq -r '.config.digest // .digest')
           fi
-          
+
           if [ -z "$ARM64_DIGEST" ] || [ "$ARM64_DIGEST" = "null" ]; then
-            ARM64_DIGEST=$(docker manifest inspect ${{ needs.docker-arm64.outputs.tag }} | jq -r '.config.digest // .digest')
+            ARM64_DIGEST=$(docker manifest inspect "$ARM64_TAG" | jq -r '.config.digest // .digest')
           fi
-          
-          echo "amd64-digest=${AMD64_DIGEST}" >> $GITHUB_OUTPUT
-          echo "arm64-digest=${ARM64_DIGEST}" >> $GITHUB_OUTPUT
-          
+
+          echo "amd64-digest=${AMD64_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "arm64-digest=${ARM64_DIGEST}" >> "$GITHUB_OUTPUT"
+
           echo "AMD64 digest: ${AMD64_DIGEST}"
           echo "ARM64 digest: ${ARM64_DIGEST}"
-    
+
       - name: Create multi-arch manifest from digests
         id: final
+        env:
+          IMAGE: ${{ inputs.images }}
+          CLEAN_TAG: ${{ steps.clean-tag.outputs.value }}
+          AMD64_DIGEST: ${{ steps.digests.outputs.amd64-digest }}
+          ARM64_DIGEST: ${{ steps.digests.outputs.arm64-digest }}
         run: |
-          IMAGE=${{ inputs.images }}
-          CLEAN_TAG=${{ steps.clean-tag.outputs.value }}
           FINAL_TAG="${IMAGE}:${CLEAN_TAG}"
-          
-          AMD64_DIGEST=${{ steps.digests.outputs.amd64-digest }}
-          ARM64_DIGEST=${{ steps.digests.outputs.arm64-digest }}
-          
+
           # Enable experimental features
           export DOCKER_CLI_EXPERIMENTAL=enabled
-          
+
           echo "Creating manifest ${FINAL_TAG} from digests:"
           echo "  AMD64: ${IMAGE}@${AMD64_DIGEST}"
           echo "  ARM64: ${IMAGE}@${ARM64_DIGEST}"
-          
+
           # Create manifest using digests instead of tags
-          docker manifest create ${FINAL_TAG} \
-            ${IMAGE}@${AMD64_DIGEST} \
-            ${IMAGE}@${ARM64_DIGEST}
-          
+          docker manifest create "${FINAL_TAG}" \
+            "${IMAGE}@${AMD64_DIGEST}" \
+            "${IMAGE}@${ARM64_DIGEST}"
+
           # Add architecture annotations using digests
-          docker manifest annotate ${FINAL_TAG} \
-            ${IMAGE}@${AMD64_DIGEST} --os linux --arch amd64
-          docker manifest annotate ${FINAL_TAG} \
-            ${IMAGE}@${ARM64_DIGEST} --os linux --arch arm64
-          
+          docker manifest annotate "${FINAL_TAG}" \
+            "${IMAGE}@${AMD64_DIGEST}" --os linux --arch amd64
+          docker manifest annotate "${FINAL_TAG}" \
+            "${IMAGE}@${ARM64_DIGEST}" --os linux --arch arm64
+
           # Push the manifest
-          docker manifest push ${FINAL_TAG}
-          
-          echo "tag=${FINAL_TAG}" >> $GITHUB_OUTPUT
+          docker manifest push "${FINAL_TAG}"
+
+          echo "tag=${FINAL_TAG}" >> "$GITHUB_OUTPUT"
           echo "Multi-arch manifest created: ${FINAL_TAG}"
 
-          PR_NUMBER=${{ github.event.pull_request.number }}
-          COMMENT="Multi-arch manifest created: ${FINAL_TAG}"
-          GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
-          COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
-
-          curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"${COMMENT}\"}"
+      - name: Comment multi-arch tag on the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          FINAL_TAG: ${{ steps.final.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            -f body="Multi-arch manifest created: \`${FINAL_TAG}\`"
