@@ -72,11 +72,14 @@ runs:
     - name: Get build info
       run: |
         echo "DATE=$(date -u +%F)" >> $GITHUB_ENV
-        echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+        # "/" is not valid in a docker tag
+        BRANCH="${GITHUB_REF#refs/heads/}"
+        echo "BRANCH_NAME=${BRANCH//\//-}" >> $GITHUB_ENV
       shell: bash
     - name: Get build info pull request
       run: |
-        echo "BRANCH_NAME=${{github.head_ref}}" >> $GITHUB_ENV
+        BRANCH="${{github.head_ref}}"
+        echo "BRANCH_NAME=${BRANCH//\//-}" >> $GITHUB_ENV
       if: ${{ startsWith(github.event_name, 'pull_request') }}
       shell: bash
     - name: Docker meta
@@ -178,7 +181,10 @@ runs:
         push: ${{ inputs.push }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        platforms: linux/amd64
+        # Single-platform requests are honored (the multi-arch workflow builds each
+        # arch on a native runner); multi-platform still falls back to amd64 only,
+        # since there is no QEMU here.
+        platforms: ${{ contains(inputs.platforms, ',') && 'linux/amd64' || inputs.platforms }}
         secret-files: |
           pipconf=/tmp/build-secrets/pipconf
           uvconfig=/tmp/build-secrets/uvconfig.toml
