@@ -118,6 +118,10 @@ runs:
         username: ${{ inputs.acr-username }}
         password: ${{ inputs.acr-password }}
     - name: Login to tignis ACR
+      # Builds for a Tignis registry may pull private base images from the other one,
+      # and both take the same credentials. A registry outside Tignis has its own
+      # credentials, which Tignis would reject.
+      if: ${{ startsWith(inputs.acr-registry-url, 'tignis') }}
       uses: docker/login-action@v3
       with:
         registry: 'tignis.azurecr.io'
