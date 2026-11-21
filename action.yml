@@ -121,7 +121,7 @@ runs:
       # Builds for a Tignis registry may pull private base images from the other one,
       # and both take the same credentials. A registry outside Tignis has its own
       # credentials, which Tignis would reject.
-      if: ${{ startsWith(inputs.acr-registry-url, 'tignis') }}
+      if: ${{ contains(inputs.acr-registry-url, 'tignis.azurecr.io') || contains(inputs.acr-registry-url, 'tignissas.azurecr.io') }}
       uses: docker/login-action@v3
       with:
         registry: 'tignis.azurecr.io'
