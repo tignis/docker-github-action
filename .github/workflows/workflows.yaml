@@ -180,6 +180,8 @@ jobs:
           AMD64_DIGEST: ${{ steps.digests.outputs.amd64-digest }}
           ARM64_DIGEST: ${{ steps.digests.outputs.arm64-digest }}
         run: |
+          # A block-scalar `images: |` ends in a newline, which would split the reference.
+          IMAGE="${IMAGE//[[:space:]]/}"
           FINAL_TAG="${IMAGE}:${CLEAN_TAG}"
 
           # Enable experimental features
